@@ -64,7 +64,10 @@ class JobFastPushFileService(JobScheduleService):
                 ),
             ),
             self.InputItem(
-                name=_("上传限速"), key="upload_speed_limit", type="string", schema=StringItemSchema(description=_("MB/s")),
+                name=_("上传限速"),
+                key="upload_speed_limit",
+                type="string",
+                schema=StringItemSchema(description=_("MB/s")),
             ),
             self.InputItem(
                 name=_("下载限速"),
@@ -79,7 +82,10 @@ class JobFastPushFileService(JobScheduleService):
                 schema=StringItemSchema(description=_("文件分发目标机器 IP，多个用英文逗号 `,` 分隔")),
             ),
             self.InputItem(
-                name=_("目标账户"), key="job_account", type="string", schema=StringItemSchema(description=_("文件分发目标机器账户")),
+                name=_("目标账户"),
+                key="job_account",
+                type="string",
+                schema=StringItemSchema(description=_("文件分发目标机器账户")),
             ),
             self.InputItem(
                 name=_("目标路径"),
@@ -140,7 +146,7 @@ class JobFastPushFileService(JobScheduleService):
         for source in file_source:
             for attr in attr_list:
                 # 将[FILESRCIP]替换成源IP
-                job_target_path = attr["job_target_path"].replace("[FILESRCIP]", source["ip_list"][0]["ip"])
+                job_target_path = attr["job_target_path"].replace("[FILESRCIP]", source["ip_list"][0]["ip"]).strip()
                 # 获取目标IP
                 original_ip_list = attr["job_ip_list"]
                 clean_result, ip_list = get_biz_ip_from_frontend(
