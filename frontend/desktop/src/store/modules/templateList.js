@@ -57,6 +57,13 @@ const templateList = {
 
             return axios.delete(`${url}${templateId}/`).then(response => response.data.objects)
         },
+        // 批量删除流程模板
+        batchDeleteTpl ({ commit }, data) {
+            const { ids, projectId, common } = data
+            const url = common ? 'api/v4/common_template/batch_delete/' : `api/v4/project_template/${projectId}/batch_delete/`
+
+            return axios.post(url, { template_ids: ids }).then(response => response.data)
+        },
         /**
          * 检测上传模板合法性
          * @param {Object} data formData数据
@@ -79,7 +86,27 @@ const templateList = {
             }).then(response => response.data)
         },
         /**
-         * 导入模板
+         * yaml类型文件导入检查
+         */
+        yamlTplImportCheck ({ commit }, data) {
+            return axios.post('template/api/upload_yaml_templates/', data, {
+                headers: {
+                    'content-type': 'application/form-data'
+                }
+            }).then(response => response.data)
+        },
+        /**
+         * 导入yaml模板
+         */
+        yamlTplImport ({ commit }, data) {
+            return axios.post('template/api/import_yaml_templates/', data, {
+                headers: {
+                    'content-type': 'application/form-data'
+                }
+            }).then(response => response.data)
+        },
+        /**
+         * 导入dat模板
          * @param {Object} data {common是否是公共流程,formData数据}
          */
         templateImport ({ commit }, data) {
@@ -100,22 +127,31 @@ const templateList = {
          * @param {String} data 模板列表数组字符串
          */
         templateExport ({ commit }, data) {
-            const { common, list } = data
+            const { common, list, type, is_full } = data
             const { project_id } = store.state.project
             let url = ''
-            if (common) {
-                url = 'common_template/api/export/'
+            const params = {
+                template_id_list: list,
+                is_full
+            }
+            if (type === 'dat') {
+                url = common ? 'common_template/api/export/' : `/template/api/export/${project_id}/`
             } else {
-                url = `template/api/export/${project_id}/`
+                url = '/template/api/export_yaml_templates/'
+                if (common) {
+                    params.template_type = 'common'
+                } else {
+                    params.template_type = 'project'
+                    params.project_id = project_id
+                }
             }
 
-            return axios.post(url, {
-                template_id_list: list
-            }, {
+            return axios.post(url, params, {
                 headers: {
                     responseType: 'arraybuffer'
                 }
-            }).then(res => {
+            }).then((res) => {
+                let result
                 if (res.headers['content-type'].indexOf('json') === -1) { // 处理arraybuffer数据
                     const { site_url } = store.state
                     const { project_id } = store.state.project
@@ -123,15 +159,16 @@ const templateList = {
                     const disposition = res.headers['content-disposition'].split(',')
                     const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/
                     const matches = filenameRegex.exec(disposition)
-                    if (matches != null && matches[1]) {
+                    if (matches !== null && matches[1]) {
                         filename = matches[1].replace(/['"]/g, '')
                     }
                     fileDownload(res.data, filename)
-                    return { result: true }
+                    result = { result: true }
                 } else { // 处理json格式数据
                     const text = Buffer.from(JSON.stringify(res.data)).toString('utf8')
-                    return JSON.parse(text)
+                    result = JSON.parse(text)
                 }
+                return result
             })
         },
         /**

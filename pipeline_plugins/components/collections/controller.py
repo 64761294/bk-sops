@@ -130,6 +130,7 @@ class SleepTimerService(Service):
             data.set_outputs("ex_data", message)
             return False
 
+        self.logger.info("wake time: {}".format(eta))
         data.outputs.timing_time = eta
 
         return True
@@ -154,4 +155,4 @@ class SleepTimerComponent(Component):
     code = "sleep_timer"
     bound_service = SleepTimerService
     form = settings.STATIC_URL + "components/atoms/bk/timer.js"
-    desc = "最长定时时间受到环境配置影响，具体时长请咨询系统管理员"
+    desc = _("最长定时时间受到环境配置影响，具体时长请咨询系统管理员")

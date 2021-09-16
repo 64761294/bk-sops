@@ -26,20 +26,21 @@ import env
 from gcloud.core.models import ProjectConfig
 from pipeline.exceptions import PipelineException
 from pipeline.contrib.periodic_task.models import PeriodicTask as PipelinePeriodicTask
+
+from gcloud.taskflow3.apis.tastypie.resources import ProjectBasedTaskFlowIAMAuthorization
 from pipeline_web.parser.validator import validate_web_pipeline_tree
 
 from iam import Subject, Action
 from iam.contrib.tastypie.shortcuts import allow_or_raise_immediate_response
-from iam.contrib.tastypie.authorization import CustomCreateCompleteListIAMAuthorization
 
 from gcloud.constants import PROJECT, COMMON
 from gcloud.tasktmpl3.models import TaskTemplate
 from gcloud.periodictask.models import PeriodicTask
-from gcloud.utils.strings import name_handler
-from gcloud.core.constant import PERIOD_TASK_NAME_MAX_LENGTH
+from gcloud.utils.strings import standardize_name
+from gcloud.constants import PERIOD_TASK_NAME_MAX_LENGTH
 from gcloud.core.resources import ProjectResource
-from gcloud.commons.template.models import CommonTemplate
-from gcloud.commons.template.utils import replace_template_id
+from gcloud.common_template.models import CommonTemplate
+from gcloud.template_base.utils import replace_template_id
 from gcloud.commons.tastypie import GCloudModelResource
 from gcloud.iam_auth import res_factory
 from gcloud.iam_auth import IAMMeta, get_iam_client
@@ -106,7 +107,7 @@ class PeriodicTaskResource(GCloudModelResource):
             "task": ALL_WITH_RELATIONS,
         }
         # iam config
-        authorization = CustomCreateCompleteListIAMAuthorization(
+        authorization = ProjectBasedTaskFlowIAMAuthorization(
             iam=iam,
             helper=PeriodicTaskIAMAuthorizationHelper(
                 system=IAMMeta.SYSTEM_ID,
@@ -203,7 +204,7 @@ class PeriodicTaskResource(GCloudModelResource):
             raise BadRequest("invalid template_source[%s]" % template_source)
 
         # XSS handle
-        name = name_handler(name, PERIOD_TASK_NAME_MAX_LENGTH)
+        name = standardize_name(name, PERIOD_TASK_NAME_MAX_LENGTH)
         creator = bundle.request.user.username
 
         # validate pipeline tree

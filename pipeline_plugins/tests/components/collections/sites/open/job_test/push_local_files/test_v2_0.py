@@ -34,6 +34,7 @@ class JobPushLocalFilesComponentTest(TestCase, ComponentTestMixin):
             PUSH_FILE_TO_IPS_FAIL_CASE(),
             SCHEDULE_FAILURE_CASE(),
             SUCCESS_MULTI_CASE(),
+            SUCCESS_MULTI_CASE_WITH_TIMEOUT(),
         ]
 
     def component_cls(self):
@@ -43,9 +44,7 @@ class JobPushLocalFilesComponentTest(TestCase, ComponentTestMixin):
 # mock path
 GET_CLIENT_BY_USER = "pipeline_plugins.components.collections.sites.open.job.push_local_files.v2_0.get_client_by_user"
 BASE_GET_CLIENT_BY_USER = "pipeline_plugins.components.collections.sites.open.job.base.get_client_by_user"
-CC_GET_IPS_INFO_BY_STR = (
-    "pipeline_plugins.components.collections.sites.open.job.push_local_files.v2_0.cc_get_ips_info_by_str"
-)
+CC_GET_IPS_INFO_BY_STR = "pipeline_plugins.components.utils.sites.open.utils.cc_get_ips_info_by_str"
 
 ENVIRONMENT_VAR_GET = (
     "pipeline_plugins.components.collections.sites.open.job.push_local_files.v2_0."
@@ -128,7 +127,7 @@ def PUSH_FILE_TO_IPS_FAIL_CASE():
         name="push_local_files v2.0 manager call fail case",
         inputs={
             "biz_cc_id": "1",
-            "job_target_ip_list": "job_target_ip_list",
+            "job_target_ip_list": "1.1.1.1",
             "job_target_account": "job_target_account",
             "job_local_files_info": {
                 "job_push_multi_local_files_table": [
@@ -163,7 +162,10 @@ def PUSH_FILE_TO_IPS_FAIL_CASE():
         schedule_assertion=None,
         execute_call_assertion=[
             CallAssertion(func=GET_CLIENT_BY_USER, calls=[Call("executor")]),
-            CallAssertion(func=CC_GET_IPS_INFO_BY_STR, calls=[Call("executor", "1", "job_target_ip_list")]),
+            CallAssertion(
+                func=CC_GET_IPS_INFO_BY_STR,
+                calls=[Call(username="executor", biz_cc_id="1", ip_str="1.1.1.1", use_cache=False)],
+            ),
             CallAssertion(
                 func=PUSH_FAIL_MANAGER.push_files_to_ips,
                 calls=[
@@ -202,7 +204,7 @@ def SCHEDULE_FAILURE_CASE():
         name="push_local_files v2 schedule failure case",
         inputs={
             "biz_cc_id": "1",
-            "job_target_ip_list": "job_target_ip_list",
+            "job_target_ip_list": "1.1.1.1",
             "job_target_account": "job_target_account",
             "job_local_files_info": {
                 "job_push_multi_local_files_table": [
@@ -251,7 +253,10 @@ def SCHEDULE_FAILURE_CASE():
         ),
         execute_call_assertion=[
             CallAssertion(func=GET_CLIENT_BY_USER, calls=[Call("executor")]),
-            CallAssertion(func=CC_GET_IPS_INFO_BY_STR, calls=[Call("executor", "1", "job_target_ip_list")]),
+            CallAssertion(
+                func=CC_GET_IPS_INFO_BY_STR,
+                calls=[Call(username="executor", biz_cc_id="1", ip_str="1.1.1.1", use_cache=False)],
+            ),
             CallAssertion(
                 func=SCHEDULE_FAILURE_MANAGER.push_files_to_ips,
                 calls=[
@@ -295,7 +300,7 @@ def SUCCESS_MULTI_CASE():
         name="push_local_files multi v2 success case",
         inputs={
             "biz_cc_id": "biz_cc_id",
-            "job_target_ip_list": "job_target_ip_list",
+            "job_target_ip_list": "1.1.1.1",
             "job_target_account": "job_target_account",
             "job_local_files_info": {
                 "job_push_multi_local_files_table": [
@@ -365,7 +370,10 @@ def SUCCESS_MULTI_CASE():
         ),
         execute_call_assertion=[
             CallAssertion(func=GET_CLIENT_BY_USER, calls=[Call("executor")]),
-            CallAssertion(func=CC_GET_IPS_INFO_BY_STR, calls=[Call("executor", "biz_cc_id", "job_target_ip_list")]),
+            CallAssertion(
+                func=CC_GET_IPS_INFO_BY_STR,
+                calls=[Call(username="executor", biz_cc_id="biz_cc_id", ip_str="1.1.1.1", use_cache=False)],
+            ),
             CallAssertion(
                 func=SUCCESS_MANAGER.push_files_to_ips,
                 calls=[
@@ -392,6 +400,144 @@ def SUCCESS_MULTI_CASE():
                         file_tags=[{"type": "upload_module", "tags": {"tag_id": "tag_id3"}}],
                         ips=[{"ip": "1.1.1.1", "bk_cloud_id": 0}],
                         target_path="target_path3",
+                    ),
+                ],
+            ),
+        ],
+        patchers=[
+            Patcher(target=ENVIRONMENT_VAR_GET, return_value="a_type"),
+            Patcher(target=FACTORY_GET_MANAGER, return_value=SUCCESS_MANAGER),
+            Patcher(target=GET_CLIENT_BY_USER, return_value=SUCCESS_ESB_CLIENT),
+            Patcher(target=BASE_GET_CLIENT_BY_USER, return_value=SUCCESS_ESB_CLIENT),
+            Patcher(target=CC_GET_IPS_INFO_BY_STR, return_value={"ip_result": [{"InnerIP": "1.1.1.1", "Source": 0}]}),
+            Patcher(target=GET_JOB_INSTANCE_URL, return_value="url_token"),
+        ],
+    )
+
+
+def SUCCESS_MULTI_CASE_WITH_TIMEOUT():
+    SUCCESS_RESULT = [
+        {"result": True, "data": {"job_id": 123}},
+        {"result": True, "data": {"job_id": 456}},
+        {"result": True, "data": {"job_id": 789}},
+    ]
+    SUCCESS_QUERY_RETURN = {
+        "data": [{"status": 3, "step_results": [{"ip_logs": [{"log_content": "log_content_success"}]}]}],
+        "result": True,
+    }
+
+    SUCCESS_ESB_CLIENT = MagicMock()
+    SUCCESS_MANAGER = MagicMock()
+    SUCCESS_MANAGER.push_files_to_ips = MagicMock(side_effect=SUCCESS_RESULT)
+    SUCCESS_ESB_CLIENT.job.get_job_instance_log = MagicMock(side_effect=[SUCCESS_QUERY_RETURN for i in range(3)])
+    return ComponentTestCase(
+        name="push_local_files multi v2 with timeout parameter success case",
+        inputs={
+            "biz_cc_id": "biz_cc_id",
+            "job_target_ip_list": "1.1.1.1",
+            "job_target_account": "job_target_account",
+            "job_local_files_info": {
+                "job_push_multi_local_files_table": [
+                    {
+                        "file_info": [
+                            {
+                                "response": {
+                                    "result": True,
+                                    "tag": {"type": "upload_module", "tags": {"tag_id": "tag_id1"}},
+                                }
+                            }
+                        ],
+                        "target_path": "target_path1",
+                    },
+                    {
+                        "file_info": [
+                            {
+                                "response": {
+                                    "result": True,
+                                    "tag": {"type": "upload_module", "tags": {"tag_id": "tag_id2"}},
+                                }
+                            }
+                        ],
+                        "target_path": "target_path2",
+                    },
+                    {
+                        "file_info": [
+                            {
+                                "response": {
+                                    "result": True,
+                                    "tag": {"type": "upload_module", "tags": {"tag_id": "tag_id3"}},
+                                }
+                            }
+                        ],
+                        "target_path": "target_path3",
+                    },
+                ]
+            },
+            "job_timeout": "1000",
+        },
+        parent_data={"executor": "executor", "project_id": "project_id"},
+        execute_assertion=ExecuteAssertion(
+            success=True,
+            outputs={
+                "requests_error": "",
+                "job_instance_id_list": [123, 456, 789],
+                "job_id_of_batch_execute": [123, 456, 789],
+                "job_inst_url": ["url_token", "url_token", "url_token"],
+                "task_count": 3,
+                "request_success_count": 3,
+                "success_count": 0,
+                "final_res": True,
+            },
+        ),
+        schedule_assertion=ScheduleAssertion(
+            success=True,
+            outputs={
+                "requests_error": "",
+                "job_instance_id_list": [123, 456, 789],
+                "job_id_of_batch_execute": [],
+                "job_inst_url": ["url_token", "url_token", "url_token"],
+                "task_count": 3,
+                "request_success_count": 3,
+                "success_count": 3,
+                "final_res": True,
+            },
+            schedule_finished=True,
+        ),
+        execute_call_assertion=[
+            CallAssertion(func=GET_CLIENT_BY_USER, calls=[Call("executor")]),
+            CallAssertion(
+                func=CC_GET_IPS_INFO_BY_STR,
+                calls=[Call(username="executor", biz_cc_id="biz_cc_id", ip_str="1.1.1.1", use_cache=False)],
+            ),
+            CallAssertion(
+                func=SUCCESS_MANAGER.push_files_to_ips,
+                calls=[
+                    Call(
+                        account="job_target_account",
+                        bk_biz_id="biz_cc_id",
+                        esb_client=SUCCESS_ESB_CLIENT,
+                        file_tags=[{"type": "upload_module", "tags": {"tag_id": "tag_id1"}}],
+                        ips=[{"ip": "1.1.1.1", "bk_cloud_id": 0}],
+                        target_path="target_path1",
+                        timeout=1000,
+                    ),
+                    Call(
+                        account="job_target_account",
+                        bk_biz_id="biz_cc_id",
+                        esb_client=SUCCESS_ESB_CLIENT,
+                        file_tags=[{"type": "upload_module", "tags": {"tag_id": "tag_id2"}}],
+                        ips=[{"ip": "1.1.1.1", "bk_cloud_id": 0}],
+                        target_path="target_path2",
+                        timeout=1000,
+                    ),
+                    Call(
+                        account="job_target_account",
+                        bk_biz_id="biz_cc_id",
+                        esb_client=SUCCESS_ESB_CLIENT,
+                        file_tags=[{"type": "upload_module", "tags": {"tag_id": "tag_id3"}}],
+                        ips=[{"ip": "1.1.1.1", "bk_cloud_id": 0}],
+                        target_path="target_path3",
+                        timeout=1000,
                     ),
                 ],
             ),

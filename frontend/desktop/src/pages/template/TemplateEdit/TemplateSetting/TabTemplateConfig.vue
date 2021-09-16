@@ -33,7 +33,8 @@
                             v-model="formData.labels"
                             ext-popover-cls="label-select"
                             :display-tag="true"
-                            :multiple="true">
+                            :multiple="true"
+                            @toggle="onSelectLabel">
                             <bk-option
                                 v-for="(item, index) in templateLabels"
                                 :key="index"
@@ -58,7 +59,8 @@
                         <bk-select
                             v-model="formData.category"
                             class="category-select"
-                            :clearable="false">
+                            :clearable="false"
+                            @toggle="onSelectCategory">
                             <bk-option
                                 v-for="(item, index) in taskCategories"
                                 :key="index"
@@ -81,17 +83,20 @@
                 <section class="form-section">
                     <h4>{{ $t('通知') }}</h4>
                     <bk-form-item :label="$t('通知方式')">
-                        <bk-checkbox-group v-model="formData.notifyType" v-bkloading="{ isLoading: notifyTypeLoading, opacity: 1, zIndex: 100 }">
-                            <template v-for="item in notifyTypeList">
-                                <bk-checkbox
-                                    v-if="item.is_active"
-                                    :key="item.type"
-                                    :value="item.type">
-                                    <img class="notify-icon" :src="`data:image/png;base64,${item.icon}`" />
-                                    <span style="word-break: break-all;">{{item.label}}</span>
-                                </bk-checkbox>
-                            </template>
-                        </bk-checkbox-group>
+                        <bk-table v-bkloading="{ isLoading: notifyTypeLoading }" class="notify-type-table" :data="formData.notifyType">
+                            <bk-table-column v-for="(col, index) in notifyTypeList" :key="index" :render-header="getNotifyTypeHeader">
+                                <template slot-scope="props">
+                                    <bk-switcher
+                                        v-if="col.type"
+                                        size="small"
+                                        theme="primary"
+                                        :value="props.row.includes(col.type)"
+                                        @change="onSelectNotifyType(props.$index, col.type, $event)">
+                                    </bk-switcher>
+                                    <span v-else>{{ props.$index === 0 ? $t('成功') : $t('失败') }}</span>
+                                </template>
+                            </bk-table-column>
+                        </bk-table>
                     </bk-form-item>
                     <bk-form-item :label="$t('通知分组')">
                         <bk-checkbox-group v-model="formData.receiverGroup" v-bkloading="{ isLoading: notifyGroupLoading, opacity: 1, zIndex: 100 }">
@@ -106,15 +111,28 @@
                 </section>
                 <section class="form-section">
                     <h4>{{ $t('其他') }}</h4>
-                    <bk-form-item :label="$t('执行代理人')">
+                    <bk-form-item v-if="!common" :label="$t('执行代理人')">
                         <member-select
                             :multiple="false"
                             :value="formData.executorProxy"
                             @change="formData.executorProxy = $event">
                         </member-select>
+                        <div class="executor-proxy-desc">
+                            <div>
+                                {{ $t('仅支持本流程的执行代理，可在项目配置中') }}
+                                <span :class="{ 'project-management': authActions && authActions.length }" @click="jumpProjectManagement">{{ $t('设置项目执行代理人') }}</span>。
+                            </div>
+                            {{ $t('模板级别的执行代理人会覆盖业务级别的执行代理人配置，') + $t('若模板配置了执行代理人，业务的执行代理人白名单不会生效。') }}
+                        </div>
                     </bk-form-item>
                     <bk-form-item property="notifyType" :label="$t('备注')">
                         <bk-input type="textarea" v-model.trim="formData.description" :rows="5" :placeholder="$t('请输入流程模板备注信息')"></bk-input>
+                    </bk-form-item>
+                    <bk-form-item property="defaultFlowType" :label="$t('任务类型偏好')">
+                        <bk-select v-model="formData.defaultFlowType" :clearable="false">
+                            <bk-option id="common" :name="$t('默认任务')"></bk-option>
+                            <bk-option id="common_func" :name="$t('职能化任务')"></bk-option>
+                        </bk-select>
                     </bk-form-item>
                 </section>
             </bk-form>
@@ -145,9 +163,8 @@
 <script>
     import { mapState, mapMutations, mapActions } from 'vuex'
     import MemberSelect from '@/components/common/Individualization/MemberSelect.vue'
-    import { errorHandler } from '@/utils/errorHandler.js'
     import tools from '@/utils/tools.js'
-    import { NAME_REG, STRING_LENGTH } from '@/constants/index.js'
+    import { NAME_REG, STRING_LENGTH, TASK_CATEGORIES } from '@/constants/index.js'
     import i18n from '@/config/i18n/index.js'
 
     export default {
@@ -165,8 +182,9 @@
         data () {
             const {
                 name, category, notify_type, notify_receivers, description,
-                executor_proxy, template_labels
+                executor_proxy, template_labels, default_flow_type
             } = this.$store.state.template
+
             return {
                 formData: {
                     name,
@@ -174,8 +192,9 @@
                     description,
                     executorProxy: executor_proxy ? [executor_proxy] : [],
                     receiverGroup: notify_receivers.receiver_group.slice(0),
-                    notifyType: notify_type.slice(0),
-                    labels: template_labels
+                    notifyType: [notify_type.success.slice(0), notify_type.fail.slice(0)],
+                    labels: template_labels,
+                    defaultFlowType: default_flow_type
                 },
                 notifyTypeList: [],
                 projectNotifyGroup: [],
@@ -200,13 +219,17 @@
                             trigger: 'blur'
                         }
                     ]
-                }
+                },
+                taskCategories: TASK_CATEGORIES
             }
         },
         computed: {
             ...mapState({
                 'projectBaseInfo': state => state.template.projectBaseInfo,
                 'timeout': state => state.template.time_out
+            }),
+            ...mapState('project', {
+                'authActions': state => state.authActions
             }),
             notifyGroup () {
                 let list = []
@@ -220,17 +243,6 @@
                     list = defaultList.concat(this.projectNotifyGroup)
                 }
                 return list
-            },
-            taskCategories () {
-                if (this.projectBaseInfo.task_categories) {
-                    return this.projectBaseInfo.task_categories.map(item => {
-                        return {
-                            id: item.value,
-                            name: item.name
-                        }
-                    })
-                }
-                return []
             }
         },
         created () {
@@ -254,11 +266,29 @@
                 try {
                     this.notifyTypeLoading = true
                     const res = await this.getNotifyTypes()
-                    this.notifyTypeList = res.data
-                } catch (error) {
-                    errorHandler(error, this)
+                    this.notifyTypeList = [{ text: i18n.t('任务状态') }].concat(res.data)
+                } catch (e) {
+                    console.log(e)
                 } finally {
                     this.notifyTypeLoading = false
+                }
+            },
+            onSelectCategory (val) {
+                if (val) {
+                    window.reportInfo({
+                        page: 'templateEdit',
+                        zone: 'selectCategory',
+                        event: 'click'
+                    })
+                }
+            },
+            onSelectLabel (val) {
+                if (val) {
+                    window.reportInfo({
+                        page: 'templateEdit',
+                        zone: 'selectLabel',
+                        event: 'click'
+                    })
                 }
             },
             onEditLabel () {
@@ -270,14 +300,14 @@
                     this.notifyGroupLoading = true
                     const res = await this.getNotifyGroup({ project_id: this.$route.params.project_id })
                     this.projectNotifyGroup = res.data
-                } catch (error) {
-                    errorHandler(error, this)
+                } catch (e) {
+                    console.log(e)
                 } finally {
                     this.notifyGroupLoading = false
                 }
             },
             getTemplateConfig () {
-                const { name, category, description, executorProxy, receiverGroup, notifyType, labels } = this.formData
+                const { name, category, description, executorProxy, receiverGroup, notifyType, labels, defaultFlowType } = this.formData
                 return {
                     name,
                     category,
@@ -285,7 +315,35 @@
                     template_labels: labels,
                     executor_proxy: executorProxy.length === 1 ? executorProxy[0] : '',
                     receiver_group: receiverGroup,
-                    notify_type: notifyType
+                    notify_type: { success: notifyType[0], fail: notifyType[1] },
+                    default_flow_type: defaultFlowType
+                }
+            },
+            jumpProjectManagement () {
+                if (this.authActions.includes('project_edit')) {
+                    this.$router.push({ name: 'projectConfig', params: { id: this.$route.params.project_id } })
+                }
+            },
+            getNotifyTypeHeader (h, data) {
+                const col = this.notifyTypeList[data.$index]
+                if (col.type) {
+                    return h('div', { 'class': 'notify-table-heder' }, [
+                        h('img', { 'class': 'notify-icon', attrs: { src: `data:image/png;base64,${col.icon}` } }, []),
+                        h('span', { style: 'word-break: break-all;' }, [col.label])
+                    ])
+                } else {
+                    return h('span', {}, [col.text])
+                }
+            },
+            onSelectNotifyType (row, type, val) {
+                const data = this.formData.notifyType[row]
+                if (val) {
+                    data.push(type)
+                } else {
+                    const index = data.findIndex(item => item === type)
+                    if (index > -1) {
+                        data.splice(index, 1)
+                    }
                 }
             },
             onSaveConfig () {
@@ -305,7 +363,7 @@
                 this.onSaveConfig()
             },
             beforeClose () {
-                const { name, category, description, template_labels, executor_proxy, notify_receivers, notify_type } = this.$store.state.template
+                const { name, category, description, template_labels, executor_proxy, notify_receivers, notify_type, default_flow_type } = this.$store.state.template
                 const originData = {
                     name,
                     category,
@@ -313,7 +371,8 @@
                     template_labels,
                     executor_proxy,
                     receiver_group: notify_receivers.receiver_group,
-                    notify_type
+                    notify_type,
+                    default_flow_type
                 }
                 const editingData = this.getTemplateConfig()
                 if (tools.isDataEqual(originData, editingData)) {
@@ -380,9 +439,15 @@
         align-items: center;
         width: 100px;
     }
-    .notify-icon {
-        margin-right: 4px;
-        width: 18px;
+    .notify-type-table {
+        /deep/ .notify-table-heder {
+            display: flex;
+            align-items: center;
+            .notify-icon {
+                margin-right: 4px;
+                width: 18px;
+            }
+        }
     }
     .user-selector {
         display: block;
@@ -408,6 +473,19 @@
     }
     .action-wrapper .bk-button {
         margin-right: 6px;
+    }
+}
+.executor-proxy-desc {
+    font-size: 12px;
+    line-height: 16px;
+    margin-top: 5px;
+    color: #b8b8b8;
+    .project-management {
+        color: #3a84ff;
+        cursor: pointer;
+    }
+    .bloack {
+        display: block;
     }
 }
 </style>

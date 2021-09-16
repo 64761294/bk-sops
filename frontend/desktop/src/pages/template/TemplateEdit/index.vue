@@ -10,8 +10,8 @@
 * specific language governing permissions and limitations under the License.
 */
 <template>
-    <div class="template-page" v-bkloading="{ isLoading: templateDataLoading || singleAtomListLoading || subAtomListLoading, zIndex: 100 }">
-        <div v-if="!templateDataLoading && !singleAtomListLoading && !subAtomListLoading" class="pipeline-canvas-wrapper">
+    <div class="template-page" v-bkloading="{ isLoading: templateDataLoading , zIndex: 100 }">
+        <div v-if="!templateDataLoading" class="pipeline-canvas-wrapper">
             <TemplateHeader
                 ref="templateHeader"
                 :name="name"
@@ -28,7 +28,9 @@
                 :tpl-actions="tplActions"
                 :is-edit-process-page="isEditProcessPage"
                 :is-preview-mode="isPreviewMode"
+                :exclude-node="excludeNode"
                 :execute-scheme-saving="executeSchemeSaving"
+                @onDownloadCanvas="onDownloadCanvas"
                 @onSaveExecuteSchemeClick="onSaveExecuteSchemeClick"
                 @goBackToTplEdit="goBackToTplEdit"
                 @onClosePreview="onClosePreview"
@@ -44,6 +46,7 @@
                     :locations="locations"
                     :node-menu-open="nodeMenuOpen"
                     @viewClick="viewUpdatedNode"
+                    @batchUpdate="isBatchUpdateDialogShow = true"
                     @foldClick="clearDotAnimation">
                 </SubflowUpdateTips>
                 <TemplateCanvas
@@ -53,6 +56,7 @@
                     :name="name"
                     :type="type"
                     :common="common"
+                    :subflow-list-loading="subflowListLoading"
                     :template-labels="templateLabels"
                     :canvas-data="canvasData"
                     :node-memu-open.sync="nodeMenuOpen"
@@ -64,7 +68,8 @@
                     @onLocationMoveDone="onLocationMoveDone"
                     @onFormatPosition="onFormatPosition"
                     @onReplaceLineAndLocation="onReplaceLineAndLocation"
-                    @onShowNodeConfig="onShowNodeConfig">
+                    @onShowNodeConfig="onShowNodeConfig"
+                    @getAtomList="getAtomList">
                 </TemplateCanvas>
             </template>
             <TaskSelectNode
@@ -76,6 +81,8 @@
                 :template_id="template_id"
                 :exclude-node="excludeNode"
                 :is-edit-process-page="isEditProcessPage"
+                :execute-scheme-saving="executeSchemeSaving"
+                @onSaveExecuteSchemeClick="onSaveExecuteSchemeClick"
                 @updateTaskSchemeList="updateTaskSchemeList"
                 @togglePreviewMode="togglePreviewMode"
                 @setExcludeNode="setExcludeNode">
@@ -84,13 +91,15 @@
                 <node-config
                     ref="nodeConfig"
                     v-if="isNodeConfigPanelShow"
-                    :is-show.sync="isNodeConfigPanelShow"
+                    :is-show="isNodeConfigPanelShow"
                     :atom-list="atomList"
                     :atom-type-list="atomTypeList"
                     :template-labels="templateLabels"
                     :common="common"
                     :project_id="project_id"
                     :node-id="idOfNodeInConfigPanel"
+                    :back-to-variable-panel="backToVariablePanel"
+                    :subflow-list-loading="subflowListLoading"
                     @globalVariableUpdate="globalVariableUpdate"
                     @updateNodeInfo="onUpdateNodeInfo"
                     @templateDataChanged="templateDataChanged"
@@ -98,10 +107,12 @@
                 </node-config>
                 <condition-edit
                     ref="conditionEdit"
-                    :is-show.sync="isShowConditionEdit"
+                    :is-show="isShowConditionEdit"
                     :condition-data="conditionData"
+                    :back-to-variable-panel="backToVariablePanel"
                     @onBeforeClose="onBeforeClose"
-                    @updataCanvasCondition="updataCanvasCondition">
+                    @updataCanvasCondition="updataCanvasCondition"
+                    @close="onCloseConfigPanel">
                 </condition-edit>
                 <template-setting
                     :project-info-loading="projectInfoLoading"
@@ -118,6 +129,20 @@
                     @updateSnapshoot="onUpdateSnapshoot">
                 </template-setting>
             </div>
+            <bk-dialog
+                class="batch-update-dialog"
+                v-model="isBatchUpdateDialogShow"
+                :close-icon="false"
+                :fullscreen="true"
+                :show-footer="false">
+                <batch-update-dialog
+                    v-if="isBatchUpdateDialogShow"
+                    :project-id="project_id"
+                    :list="subflowShouldUpdated"
+                    @globalVariableUpdate="globalVariableUpdate"
+                    @close="isBatchUpdateDialogShow = false">
+                </batch-update-dialog>
+            </bk-dialog>
             <bk-dialog
                 width="400"
                 ext-cls="common-dialog"
@@ -190,7 +215,6 @@
     import tools from '@/utils/tools.js'
     import bus from '@/utils/bus.js'
     import atomFilter from '@/utils/atomFilter.js'
-    import { errorHandler } from '@/utils/errorHandler.js'
     import validatePipeline from '@/utils/validatePipeline.js'
     import TemplateHeader from './TemplateHeader.vue'
     import TemplateCanvas from '@/components/common/TemplateCanvas/index.vue'
@@ -205,6 +229,7 @@
     import { STRING_LENGTH } from '@/constants/index.js'
     import { NODES_SIZE_POSITION } from '@/constants/nodes.js'
     import TaskSelectNode from '../../task/TaskCreate/TaskSelectNode.vue'
+    import BatchUpdateDialog from './BatchUpdateDialog.vue'
 
     export default {
         name: 'TemplateEdit',
@@ -215,7 +240,8 @@
             NodeConfig,
             ConditionEdit,
             TemplateSetting,
-            SubflowUpdateTips
+            SubflowUpdateTips,
+            BatchUpdateDialog
         },
         mixins: [permission],
         props: ['template_id', 'type', 'common', 'entrance'],
@@ -232,7 +258,7 @@
                 isEditProcessPage: true,
                 excludeNode: [],
                 singleAtomListLoading: false,
-                subAtomListLoading: false,
+                subflowListLoading: false,
                 projectInfoLoading: false,
                 templateDataLoading: false,
                 templateSaving: false,
@@ -242,7 +268,8 @@
                 isGlobalVariableUpdate: false, // 全局变量是否有更新
                 isTemplateDataChanged: false,
                 isShowConditionEdit: false,
-                isNodeConfigPanelShow: false,
+                isNodeConfigPanelShow: false, // 右侧模板是否展开
+                isSelectorPanelShow: false, // 右侧子流程模板是否展开
                 isFromTplListRoute: false, // 是否由模板列表页跳转进入
                 isLeaveDialogShow: false,
                 nodeMenuOpen: false, // 左侧边栏节点列表菜单是否展开
@@ -250,11 +277,12 @@
                 allowLeave: false,
                 leaveToPath: '',
                 idOfNodeInConfigPanel: '',
+                isGetAtomList: false,
                 atomList: [],
                 atomTypeList: {
                     tasknode: [],
                     subflow: []
-                },
+                }, // 左侧边栏菜单数据
                 snapshoots: [],
                 snapshootTimer: null,
                 templateLabels: [],
@@ -264,6 +292,8 @@
                 conditionData: {},
                 multipleTabDialogShow: false,
                 tplEditingTabCount: 0, // 正在编辑的模板在同一浏览器打开的数目
+                isBatchUpdateDialogShow: false,
+                backToVariablePanel: false,
                 nodeGuideConfig: {
                     el: '',
                     width: 150,
@@ -285,7 +315,15 @@
                         }
                     ]
                 },
-                typeOfNodeNameEmpty: '' // 新建流程未选择插件的节点类型
+                typeOfNodeNameEmpty: '', // 新建流程未选择插件的节点类型
+                totalPage: 0,
+                currentPage: 0,
+                limit: 25,
+                offset: 0,
+                pollingTimer: null,
+                isPageOver: false,
+                isThrottled: false, // 滚动节流 是否进入cd
+                envVariableData: {}
             }
         },
         computed: {
@@ -297,7 +335,6 @@
                 'lines': state => state.template.line,
                 'constants': state => state.template.constants,
                 'gateways': state => state.template.gateways,
-                'projectBaseInfo': state => state.template.projectBaseInfo,
                 'category': state => state.template.category,
                 'subprocess_info': state => state.template.subprocess_info,
                 'username': state => state.username,
@@ -337,8 +374,8 @@
                             && location.type === 'subflow'
                         ) {
                             this.subprocess_info.details.some(subflow => {
-                                if (subflow.subprocess_node_id === location.id && subflow.expired) {
-                                    data.hasUpdated = true
+                                if (subflow.subprocess_node_id === location.id) {
+                                    data.hasUpdated = subflow.expired
                                     return true
                                 }
                             })
@@ -349,7 +386,7 @@
                 }
             },
             subflowShouldUpdated () {
-                if (this.subprocess_info && this.subprocess_info.subproc_has_update) {
+                if (this.subprocess_info) {
                     return this.subprocess_info.details
                 }
                 return []
@@ -362,6 +399,13 @@
                     tip = this.$t('确定保存修改的内容？')
                 }
                 return tip
+            }
+        },
+        watch: {
+            isNodeConfigPanelShow (val) {
+                if (!val) {
+                    this.atomTypeList.subflow.length = 0
+                }
             }
         },
         beforeRouteEnter (to, from, next) {
@@ -426,7 +470,8 @@
                 'loadSubflowConfig'
             ]),
             ...mapActions('project/', [
-                'getProjectLabelsWithDefault'
+                'getProjectLabelsWithDefault',
+                'loadEnvVariableList'
             ]),
             ...mapMutations('template/', [
                 'initTemplateData',
@@ -458,10 +503,13 @@
                 'loadTaskScheme',
                 'saveTaskSchemList'
             ]),
+            getAtomList  (val) {
+                this.isGetAtomList = val
+            },
             /**
              * 加载标准插件列表
              */
-            async getSingleAtomList () {
+            async getSingleAtomList (val) {
                 this.singleAtomListLoading = true
                 try {
                     const params = {}
@@ -492,7 +540,7 @@
                     this.handleAtomGroup(atomList)
                     this.markNodesPhase()
                 } catch (e) {
-                    errorHandler(e, this)
+                    console.log(e)
                 } finally {
                     this.singleAtomListLoading = false
                 }
@@ -505,30 +553,11 @@
                 try {
                     const resp = await this.loadProjectBaseInfo()
                     this.setProjectBaseInfo(resp.data)
-                    this.getSubflowList()
+                    // this.getSubflowList()
                 } catch (e) {
-                    errorHandler(e, this)
+                    console.log(e)
                 } finally {
                     this.projectInfoLoading = false
-                }
-            },
-            /**
-             * 加载子流程列表
-             */
-            async getSubflowList (subAtomData) {
-                this.subAtomListLoading = true
-                try {
-                    const data = {
-                        project_id: this.project_id,
-                        common: this.common,
-                        templateId: this.template_id
-                    }
-                    const resp = await this.loadSubflowList(data)
-                    this.handleSubflowList(resp)
-                } catch (e) {
-                    errorHandler(e, this)
-                } finally {
-                    this.subAtomListLoading = false
                 }
             },
             /**
@@ -550,7 +579,7 @@
                     if (e.status === 404) {
                         this.$router.push({ name: 'notFoundPage' })
                     }
-                    errorHandler(e, this)
+                    console.log(e)
                 } finally {
                     this.templateDataLoading = false
                 }
@@ -574,7 +603,7 @@
                     await this.loadAtomConfig({ atom: code, version, project_id })
                     this.addSingleAtomActivities(location, this.atomConfig[code][version])
                 } catch (e) {
-                    errorHandler(e, this)
+                    console.log(e)
                 } finally {
                     this.atomConfigLoading = false
                 }
@@ -611,7 +640,7 @@
                     activities.constants = constants || {}
                     this.setActivities({ type: 'edit', location: activities })
                 } catch (e) {
-                    errorHandler(e, this)
+                    console.log(e)
                 }
             },
             /**
@@ -621,9 +650,36 @@
                 try {
                     this.systemVarsLoading = true
                     const result = await this.loadInternalVariable()
-                    this.setInternalVariable(result.data)
+                    const variableIndex = Object.keys(result.data).map(index => {
+                        return result.data[index].index
+                    })
+                    let variableminIndex = Math.min(...variableIndex)
+                    let internalVariable = { ...result.data }
+                    if (!this.common) {
+                        const resp = await this.loadEnvVariableList({ project_id: this.$route.params.project_id })
+                        Object.keys(resp.data).forEach(item => {
+                            const { name, value, desc } = resp.data[item]
+                            const projectVar = {
+                                key: '${_env_' + resp.data[item].key + '}',
+                                name,
+                                value,
+                                desc,
+                                index: --variableminIndex,
+                                custom_type: 'input',
+                                form_schema: {},
+                                show_type: 'hide',
+                                validation: '^.+$',
+                                source_info: {},
+                                source_type: 'project',
+                                source_tag: 'input.input'
+                            }
+                            this.envVariableData['${_env_' + resp.data[item].key + '}'] = projectVar
+                        })
+                        internalVariable = Object.assign(this.envVariableData, result.data)
+                    }
+                    this.setInternalVariable(internalVariable)
                 } catch (e) {
-                    errorHandler(e, this)
+                    console.log(e)
                 } finally {
                     this.systemVarsLoading = false
                 }
@@ -636,8 +692,8 @@
                     this.templateLabelLoading = true
                     const res = await this.getProjectLabelsWithDefault(this.project_id)
                     this.templateLabels = res.data
-                } catch (error) {
-                    errorHandler(error, this)
+                } catch (e) {
+                    console.log(e)
                 } finally {
                     this.templateLabelLoading = false
                 }
@@ -679,7 +735,8 @@
                         await this.saveTaskSchemList({
                             project_id: this.project_id,
                             template_id: data.template_id,
-                            schemes
+                            schemes,
+                            isCommon: this.common
                         })
                     }
 
@@ -701,12 +758,12 @@
                         }
                         tplTabCount.setTab(tabQuerydata, 'add')
                     }
-                    
+
                     if (this.createTaskSaving) {
                         this.goToTaskUrl(data.template_id)
                     }
                 } catch (e) {
-                    errorHandler(e, this)
+                    console.log(e)
                 } finally {
                     this.saveAndCreate = false
                     this.pid = undefined
@@ -785,20 +842,6 @@
                 this.atomTypeList.tasknode = grouped
             },
             /**
-             * 子流程列表
-             */
-            handleSubflowList (data) {
-                const list = []
-                const reqPermission = this.common ? ['common_flow_view'] : ['flow_view']
-                data.objects.forEach(item => {
-                    // 克隆模板可以引用被克隆的模板，模板不可以引用自己
-                    if (this.type === 'clone' || item.id !== Number(this.template_id)) {
-                        item.hasPermission = this.hasPermission(reqPermission, item.auth_actions)
-                        list.push(item)
-                    }
-                })
-                this.atomTypeList.subflow = list
-            },
             /**
              * 打开节点配置面板
              * @param {String} id 节点uuid
@@ -810,9 +853,13 @@
             /**
              * 关闭节点配置面板
              */
-            closeConfigPanel () {
+            closeConfigPanel (openVariablePanel) {
                 this.isNodeConfigPanelShow = false
                 this.idOfNodeInConfigPanel = ''
+                this.backToVariablePanel = false
+                if (openVariablePanel) {
+                    this.onChangeSettingPanel('globalVariableTab')
+                }
             },
             /**
              * 设置流程模板为修改状态
@@ -972,6 +1019,18 @@
              * 打开节点配置面板
              */
             onShowNodeConfig (id) {
+                // 判断节点配置的插件是否存在
+                const nodeConfig = this.$store.state.template.activities[id]
+                if (nodeConfig.type === 'ServiceActivity' && nodeConfig.name) {
+                    const atom = this.atomList.find(item => item.code === nodeConfig.component.code)
+                    if (!atom) {
+                        this.$bkMessage({
+                            message: '该节点配置的插件不存在，请检查流程数据',
+                            theme: 'error'
+                        })
+                        return
+                    }
+                }
                 const location = this.locations.find(item => item.id === id)
                 if (['tasknode', 'subflow'].includes(location.type)) {
                     this.showConfigPanel(id)
@@ -981,9 +1040,18 @@
              * 自动排版
              */
             async onFormatPosition () {
+                window.reportInfo({
+                    page: 'templateEdit',
+                    zone: 'formatPositionIcon',
+                    event: 'click'
+                })
                 const validateMessage = validatePipeline.isNodeLineNumValid(this.canvasData)
                 if (!validateMessage.result) {
-                    errorHandler({ message: validateMessage.message }, this)
+                    this.$bkMessage({
+                        message: validateMessage.message,
+                        theme: 'error',
+                        ellipsisLine: 0
+                    })
                     return
                 }
                 if (this.canvasDataLoading) {
@@ -1016,11 +1084,9 @@
                                 theme: 'success'
                             })
                         })
-                    } else {
-                        errorHandler(res, this)
                     }
-                } catch (error) {
-                    errorHandler(error, this)
+                } catch (e) {
+                    console.log(e)
                 } finally {
                     this.canvasDataLoading = false
                 }
@@ -1056,6 +1122,7 @@
                     case 'branchgateway':
                     case 'parallelgateway':
                     case 'convergegateway':
+                    case 'conditionalparallelgateway':
                         this.setGateways({ type: changeType, location })
                         break
                     case 'startpoint':
@@ -1095,6 +1162,9 @@
                 this.setLocation({ type: 'edit', location: updatedLocation })
                 this.$refs.templateCanvas.onUpdateNodeInfo(id, data)
             },
+            onDownloadCanvas () {
+                this.$refs.templateCanvas.onDownloadCanvas()
+            },
             async onSaveExecuteSchemeClick () {
                 try {
                     this.executeSchemeSaving = true
@@ -1107,26 +1177,22 @@
                     const resp = await this.saveTaskSchemList({
                         project_id: this.project_id,
                         template_id: this.template_id,
-                        schemes
+                        schemes,
+                        isCommon: this.common
                     })
-                    this.isExectueSchemeDialog = false
-                    if (!resp.result) {
+                    if (resp.result) {
                         this.$bkMessage({
-                            message: resp.message,
-                            theme: 'error'
+                            message: i18n.t('方案保存成功'),
+                            theme: 'success'
                         })
-                        return
+                        this.isExectueSchemeDialog = false
+                        this.allowLeave = true
+                        this.isTemplateDataChanged = false
+                        this.isEditProcessPage = true
+                        this.isSchemaListChange = false
                     }
-                    this.$bkMessage({
-                        message: i18n.t('方案保存成功'),
-                        theme: 'success'
-                    })
-                    this.allowLeave = true
-                    this.isTemplateDataChanged = false
-                    this.isEditProcessPage = true
-                    this.isSchemaListChange = false
-                } catch (error) {
-                    errorHandler(error, this)
+                } catch (e) {
+                    console.log(e)
                 } finally {
                     this.executeSchemeSaving = false
                 }
@@ -1138,11 +1204,11 @@
                     this.isEditProcessPage = true
                 }
             },
-            updateTaskSchemeList (val) {
+            updateTaskSchemeList (val, isChange) {
                 this.taskSchemeList = val
                 this.allowLeave = false
-                this.isTemplateDataChanged = true
-                this.isSchemaListChange = true
+                this.isTemplateDataChanged = isChange
+                this.isSchemaListChange = isChange
             },
             onClosePreview () {
                 this.$refs.taskSelectNode.togglePreviewMode(false)
@@ -1189,7 +1255,11 @@
                 // 校验节点数目
                 const validateMessage = validatePipeline.isNodeLineNumValid(this.canvasData)
                 if (!validateMessage.result) {
-                    errorHandler({ message: validateMessage.message }, this)
+                    this.$bkMessage({
+                        message: validateMessage.message,
+                        theme: 'error',
+                        ellipsisLine: 2
+                    })
                     return
                 }
                 // 节点配置是否错误
@@ -1201,7 +1271,11 @@
                     if (this.typeOfNodeNameEmpty) {
                         message = this.typeOfNodeNameEmpty === 'serviceActivity' ? i18n.t('请选择节点的插件类型') : i18n.t('请选择节点的子流程')
                     }
-                    errorHandler({ message }, this)
+                    this.$bkMessage({
+                        message,
+                        theme: 'error',
+                        ellipsisLine: 2
+                    })
                     return
                 }
                 const isAllNodeValid = this.validateAtomNode()
@@ -1275,6 +1349,13 @@
                 this.isShowDialog = false
                 this.isShowConditionEdit = false
             },
+            onCloseConfigPanel (openVariablePanel) {
+                this.isShowConditionEdit = false
+                this.backToVariablePanel = false
+                if (openVariablePanel) {
+                    this.onChangeSettingPanel('globalVariableTab')
+                }
+            },
             // 更新分支数据
             updataCanvasCondition (data) {
                 // 更新 cavans 页面数据
@@ -1312,6 +1393,7 @@
             // 全局变量引用详情点击回调
             onCitedNodeClick (data) {
                 const { group, id } = data
+                this.backToVariablePanel = true
                 if (group === 'activities') {
                     this.activeSettingTab = ''
                     this.showConfigPanel(id)
@@ -1591,5 +1673,5 @@
             }
         }
     }
-    
+
 </style>

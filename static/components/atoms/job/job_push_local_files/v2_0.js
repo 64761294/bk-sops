@@ -112,7 +112,7 @@
                             type: "primary",
                             title: gettext('添加'),
                             size: "normal",
-                            margin:"50px",
+                            margin: "50px",
                             cols: 1,
                             formViewHidden: true
                         },
@@ -129,19 +129,20 @@
                                     let local_files = local_files_obj._get_value();
                                     let job_target_path = job_target_path_obj._get_value();
 
-                                    if(local_files.length === 0){
+                                    if (local_files.length === 0) {
                                         alert(gettext("请上传文件"))
                                         return
                                     }
-                                    if(job_target_path === ""){
+                                    if (job_target_path === "") {
                                         alert(gettext("请填写目标路径"))
                                         return
                                     }
 
                                     let show_name = "";
                                     $.each(local_files, function (i, v) {
-                                        show_name += v.name + ";"
+                                        show_name += v.name + "\n"
                                     })
+                                    show_name = show_name.slice(0, show_name.length - 1)
 
                                     table_obj._get_value().push({
                                         "show_file": show_name,
@@ -152,7 +153,6 @@
 
                                     //reset info tag
                                     local_files_obj._set_value([])
-                                    job_target_path_obj._set_value("")
 
                                 }
                             },
@@ -170,12 +170,12 @@
                             ],
                             empty_text: gettext("无数据"),
                             deleteable: true,
-                            editable: false,
+                            editable: true,
                             rowEditable: false,
                             columns: [
                                 {
                                     tag_code: "show_file",
-                                    type: "text",
+                                    type: "textarea",
                                     attrs: {
                                         name: gettext("文件信息")
                                     }
@@ -228,7 +228,7 @@
             type: "textarea",
             attrs: {
                 name: gettext("目标IP"),
-                placeholder: gettext("IP必须填写【云区域ID:IP】或者【IP】格式之一，多个用换行分隔；【IP】格式需要保证所填写的内网IP在配置平台(CMDB)的该业务中是唯一的"),
+                placeholder: gettext("输入IP, 多个用英文逗号 `,` 或换行分隔"),
                 hookable: true,
                 validation: [
                     {
@@ -250,6 +250,14 @@
                 ]
             }
         },
-
+        {
+            tag_code: "job_timeout",
+            type: "input",
+            attrs: {
+                name: gettext("超时时间"),
+                placeholder: gettext("单位为秒，为空时使用JOB默认值"),
+                hookable: true,
+            }
+        },
     ]
 })();

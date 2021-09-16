@@ -153,8 +153,6 @@
 
                                     //reset info tag
                                     local_files_obj._set_value([])
-                                    job_target_path_obj._set_value("")
-
                                 }
                             },
                         ]
@@ -206,13 +204,30 @@
 
 
         },
-
+        {
+            tag_code: "job_across_biz",
+            type: "radio",
+            attrs: {
+                name: gettext("是否允许跨业务"),
+                hookable: true,
+                items: [
+                    {value: true, name: gettext("是")},
+                    {value: false, name: gettext("否")},
+                ],
+                default: false,
+                validation: [
+                    {
+                        type: "required"
+                    }
+                ]
+            }
+        },
         {
             tag_code: "job_target_ip_list",
             type: "textarea",
             attrs: {
                 name: gettext("目标IP"),
-                placeholder: gettext("IP必须填写【云区域ID:IP】或者【IP】格式之一，多个用换行分隔；【IP】格式需要保证所填写的内网IP在配置平台(CMDB)的该业务中是唯一的"),
+                placeholder: gettext("输入IP, 多个用英文逗号 `,` 或换行分隔"),
                 hookable: true,
                 validation: [
                     {
@@ -234,6 +249,14 @@
                 ]
             }
         },
-
+        {
+            tag_code: "job_timeout",
+            type: "input",
+            attrs: {
+                name: gettext("超时时间"),
+                placeholder: gettext("单位为秒，为空时使用JOB默认值"),
+                hookable: true,
+            }
+        },
     ]
 })();

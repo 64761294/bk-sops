@@ -104,8 +104,25 @@
                             },
                             validation: [
                                 {
-                                    type: "required",
+                                    type: "custom",
+                                    args: function (value) {
+                                        let self = this
+                                        let result = {
+                                            result: true,
+                                            error_message: ""
+                                        }
+                                        if (!self.get_parent) {
+                                            return result
+                                        } else if (self.get_parent().get_child('nodeman_host_input_type')) {
+                                            if (self.get_parent().get_child('nodeman_host_input_type').value === "host_ip" && !value.toString()) {
+                                                result.result = false;
+                                                result.error_message = gettext("请选云区域");
+                                            }
+                                        }
+                                        return result
+                                    }
                                 }
+
                             ],
 
                         },
@@ -139,7 +156,7 @@
                         type: "textarea",
                         attrs: {
                             name: gettext("主机IP"),
-                            placeholder: gettext("多个用英文逗号 `,` 分隔"),
+                            placeholder: gettext("多个用英文逗号 `,` 或换行分隔"),
                             hookable: true,
                             validation: []
                         },
@@ -288,6 +305,7 @@
                                 source: "nodeman_plugin_type",
                                 type: "change",
                                 action: function (value) {
+                                    this.value = "";
                                     this.remote_url = $.context.get('site_url') + 'pipeline/nodeman_get_plugin_list/' + value + '/';
                                     this.remoteMethod();
                                 }
@@ -303,6 +321,7 @@
                             remote: true,
                             items: [],
                             remote_url: "",
+                            value: "",
                             remote_data_init: function (resp) {
                                 if (resp.result === false) {
                                     show_msg(resp.message, "error");
@@ -325,17 +344,27 @@
                                         this.remote_url = $.context.get('site_url') + 'pipeline/nodeman_get_plugin_version/' + value + '/' + os + '/';
                                         this.remoteMethod()
                                     }
+
                                 }
                             },
                             {
                                 source: "nodeman_plugin",
                                 type: "change",
                                 action: function (value) {
+                                    this.value = ""
                                     let os = this.get_parent().get_parent().get_child("nodeman_host_os_type").value
                                     this.remote_url = $.context.get('site_url') + 'pipeline/nodeman_get_plugin_version/' + value + '/' + os + '/';
                                     this.remoteMethod()
                                 }
                             },
+                            {
+                                source: "nodeman_plugin_type",
+                                type: "change",
+                                action: function (value) {
+                                    this.items = []
+                                    this.value = ""
+                                }
+                            }
                         ]
                     },
 

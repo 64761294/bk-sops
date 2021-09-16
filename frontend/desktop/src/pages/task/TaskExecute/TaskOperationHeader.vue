@@ -209,7 +209,8 @@
                 if (this.view_mode === 'appmaker') {
                     return this.$router.push({
                         name: 'appmakerTaskHome',
-                        params: { type: 'edit', app_id: this.$route.params.app_id, project_id: this.project_id }
+                        params: { type: 'edit', app_id: this.$route.params.app_id, project_id: this.project_id },
+                        query: { template_id: this.$route.query.template_id }
                     })
                 }
                 if (this.$route.path.indexOf('/function') === 0) {
@@ -297,6 +298,7 @@
         color: #63656e;
         border-radius: 10px;
         background-color: #dcdee5;
+        &.EXPIRED,
         &.CREATED {
             color: #63656e;
         }

@@ -17,7 +17,6 @@ from pipeline import exceptions
 from pipeline.core.data import library, var
 from pipeline.core.data.expression import ConstantTemplate
 from pipeline.validators.utils import format_node_io_to_list
-from pipeline.component_framework.constant import ConstantPool
 
 from pipeline_web.constants import PWE
 
@@ -33,22 +32,11 @@ def format_web_data_to_pipeline(web_pipeline, is_subprocess=False):
     constants = pipeline_tree.pop("constants")
     # classify inputs and outputs
     classification = classify_constants(constants, is_subprocess)
-    # pre render mako for some vars
-    pre_render_keys = get_pre_render_mako_keys(constants)
-
-    pool = {}
-    for key in pre_render_keys:
-        var_info = classification["data_inputs"][key]
-        if var_info["type"] != "lazy":
-            pool[key] = {"value": var_info["value"]}
-
-    pre_render_pool = ConstantPool(pool=pool)
-    for k, v in pre_render_pool.pool.items():
-        classification["data_inputs"][k]["value"] = v["value"]
 
     pipeline_tree["data"] = {
         "inputs": classification["data_inputs"],
         "outputs": [key for key in pipeline_tree.pop("outputs")],
+        "pre_render_keys": sorted(list(get_pre_render_mako_keys(constants))),
     }
 
     for act_id, act in list(pipeline_tree["activities"].items()):
@@ -99,9 +87,6 @@ def get_pre_render_mako_keys(constants):
         if "pre_render_mako" in info:
             if info["pre_render_mako"]:
                 pre_render_inputs_keys.add(key)
-        else:
-            if info["show_type"] != "show":
-                pre_render_inputs_keys.add(key)
 
     return pre_render_inputs_keys
 
@@ -138,11 +123,19 @@ def classify_constants(constants, is_subprocess):
                 acts_outputs.setdefault(source_step, {}).update({source_key: key})
         # 自定义的Lazy类型变量
         elif info["custom_type"] and var_cls and issubclass(var_cls, var.LazyVariable):
+            if (
+                var_cls.type == "meta"
+                and hasattr(var_cls, "process_meta_avalue")
+                and callable(var_cls.process_meta_avalue)
+            ):
+                value = var_cls.process_meta_avalue(info["meta"], info["value"])
+            else:
+                value = info["value"]
             data_inputs[key] = {
                 "type": "lazy",
                 "source_tag": info["source_tag"],
                 "custom_type": info["custom_type"],
-                "value": info["value"],
+                "value": value,
                 "is_param": info["is_param"],
             }
         else:

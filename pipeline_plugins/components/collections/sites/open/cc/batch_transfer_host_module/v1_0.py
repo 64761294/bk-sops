@@ -114,19 +114,24 @@ class CCBatchTransferHostModule(Service):
             host_result = cc_get_host_id_by_innerip(executor, biz_cc_id, cc_host_ip_list, supplier_account)
             if not host_result["result"]:
                 message = _("无法获取主机id列表，主机属性={}, message={}".format(attr, host_result["message"]))
-                data.set_outputs("ex_data", message)
+                self.logger.info(message)
                 failed_update.append(message)
                 continue
             # 获取 bk module id
             cc_list_select_node_inst_id_return = cc_list_select_node_inst_id(
-                executor, biz_cc_id, supplier_account, BkObjType.MODULE, cc_module_path
+                executor,
+                biz_cc_id,
+                supplier_account,
+                BkObjType.MODULE,
+                cc_module_path,
+                parent_data.get_one_of_inputs("bk_biz_name"),
             )
             if not cc_list_select_node_inst_id_return["result"]:
                 message = _(
                     "无法获取bk module id，"
                     "主机属性={}, message={}".format(attr, cc_list_select_node_inst_id_return["message"])
                 )
-                data.set_outputs("ex_data", message)
+                self.logger.info(message)
                 failed_update.append(message)
                 continue
             cc_module_select = cc_list_select_node_inst_id_return["data"]
@@ -174,5 +179,7 @@ class CCBatchTransferHostModuleComponent(Component):
     desc = _(
         "1. 填参方式支持手动填写和结合模板生成（单行自动扩展）\n"
         '2. 使用单行自动扩展模式时，每一行支持填写多个已自定义分隔符或是英文逗号分隔的数据，插件后台会自动将其扩展成多行，如 "1,2,3,4" 会被扩展成四行：1 2 3 4 \n'
-        "3. 结合模板生成（单行自动扩展）当有一列有多条数据时，其他列要么也有相等个数的数据，要么只有一条数据"
+        "3. 结合模板生成（单行自动扩展）当有一列有多条数据时，其他列要么也有相等个数的数据，要么只有一条数据\n"
+        "注意：如果需要移动主机到空闲机池，请使用插件如下插件:\n"
+        "转移主机至待回收模块, 转移主机至故障机模块, 转移主机至空闲机模块"
     )
