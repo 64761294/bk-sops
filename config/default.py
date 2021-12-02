@@ -18,6 +18,7 @@ from django.utils.translation import ugettext_lazy as _
 from blueapps.conf.log import get_logging_config_dict
 from blueapps.conf.default_settings import *  # noqa
 from blueapps.opentelemetry.utils import inject_logging_trace_info
+from env_v2 import BK_SOPS_HOST
 from gcloud.exceptions import ApiRequestError
 from pipeline.celery.queues import ScalableQueues
 from bamboo_engine.config import Settings as BambooSettings
@@ -646,3 +647,6 @@ if env.BK_MONITOR_REPORT_ENABLE:
 ENABLE_OTEL_TRACE = env.ENABLE_OTEL_TRACE
 
 BK_APP_OTEL_INSTRUMENT_DB_API = env.BK_APP_OTEL_INSTRUMENT_DB_API
+
+# 系统访问地址
+BK_SOPS_HOST = BK_SOPS_HOST
