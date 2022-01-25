@@ -14,11 +14,11 @@ from rest_framework import serializers
 
 from gcloud.core.models import ProjectCounter
 
-from .project import ProjectSerializer
+from .project import ProjectViewSetSerializer
 
 
 class CommonProjectSerializer(serializers.ModelSerializer):
-    project = ProjectSerializer()
+    project = ProjectViewSetSerializer
 
     class Meta:
         model = ProjectCounter

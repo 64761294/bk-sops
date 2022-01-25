@@ -16,7 +16,7 @@ from gcloud.iam_auth import IAMMeta, res_factory
 from gcloud.core.models import Project
 
 from ..filter import ALL_LOOKUP, AllLookupSupportFilterSet
-from ..serilaziers import ProjectSerializer
+from ..serilaziers import ProjectViewSetSerializer
 from ..resource_helpers import ViewSetResourceHelper
 from ..permission import IamPermissionInfo, IamPermission, HAS_OBJECT_PERMISSION
 
@@ -52,7 +52,7 @@ class ProjectFilter(AllLookupSupportFilterSet):
 class ProjectSetViewSet(GcloudUpdateViewSet, GcloudListViewSet):
     queryset = Project.objects.all().order_by("-id")
     search_fields = ["id", "name", "desc", "creator"]
-    serializer_class = ProjectSerializer
+    serializer_class = ProjectViewSetSerializer
     permission_classes = [permissions.IsAuthenticated, ProjectPermission]
     filterset_class = ProjectFilter
 

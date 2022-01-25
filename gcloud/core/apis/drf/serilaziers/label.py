@@ -21,7 +21,7 @@ class LabelGroupSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class LabelSerializer(serializers.ModelSerializer):
+class LabelViewSetSerializer(serializers.ModelSerializer):
     group = LabelGroupSerializer(read_only=True)
 
     class Meta:

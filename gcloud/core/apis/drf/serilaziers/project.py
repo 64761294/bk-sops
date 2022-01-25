@@ -15,7 +15,7 @@ from rest_framework import serializers
 from gcloud.core.models import Project
 
 
-class ProjectSerializer(serializers.ModelSerializer):
+class ProjectViewSetSerializer(serializers.ModelSerializer):
     create_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S %z", read_only=True)
 
     class Meta:
