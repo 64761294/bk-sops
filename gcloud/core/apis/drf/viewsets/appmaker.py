@@ -20,8 +20,7 @@ from gcloud.core.apis.drf.serilaziers.appmaker import AppmakerSerializer
 from gcloud.core.apis.drf.resource_helpers import ViewSetResourceHelper
 from gcloud.iam_auth import res_factory
 from gcloud.iam_auth import IAMMeta
-from gcloud.core.apis.drf.filtersets import AllLookupSupportFilterSet
-from ..permission import IamPermission, IamPermissionInfo, HAS_OBJECT_PERMISSION
+from gcloud.core.apis.drf.permission import IamPermission, IamPermissionInfo, HAS_OBJECT_PERMISSION
 
 
 class AppmakerPermission(IamPermission):
@@ -33,12 +32,6 @@ class AppmakerPermission(IamPermission):
             IAMMeta.MINI_APP_DELETE_ACTION, res_factory.resources_for_mini_app_obj, HAS_OBJECT_PERMISSION
         ),
     }
-
-
-class AppmakerFilter(AllLookupSupportFilterSet):
-    class Meta:
-        model = AppMaker
-        fields = {"editor": ["exact"], "project__id": ["exact"], "edit_time": ["gte", "lte"]}
 
 
 class AppmakerListViewSet(GcloudListViewSet, mixins.DestroyModelMixin):
@@ -53,5 +46,5 @@ class AppmakerListViewSet(GcloudListViewSet, mixins.DestroyModelMixin):
             IAMMeta.MINI_APP_VIEW_ACTION,
         ],
     )
-    filter_class = AppmakerFilter
+    filter_fields = {"editor": ["exact"], "project__id": ["exact"], "edit_time": ["gte", "lte"]}
     pagination_class = LimitOffsetPagination

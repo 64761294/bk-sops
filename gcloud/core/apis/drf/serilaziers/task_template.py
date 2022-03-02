@@ -10,7 +10,7 @@ Unless required by applicable law or agreed to in writing, software distributed 
 an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
 specific language governing permissions and limitations under the License.
 """
-import ujson as json
+import json
 
 from rest_framework import serializers
 from django.utils.translation import ugettext_lazy as _
@@ -18,15 +18,16 @@ from django.utils.translation import ugettext_lazy as _
 from gcloud.tasktmpl3.models import TaskTemplate
 from gcloud.core.models import Project
 from gcloud.core.apis.drf.serilaziers.project import ProjectSerializer
-from gcloud.utils.drf.serializer import ReadWriteSerializerMethodField
+from gcloud.core.apis.drf.serilaziers.template import BaseTemplateSerializer
 from gcloud.constants import TASK_CATEGORY
 
 
-class TaskTemplateSerializer(serializers.ModelSerializer):
-
-    notify_type = ReadWriteSerializerMethodField(read_only=True, help_text="通知类型")
-    notify_receivers = ReadWriteSerializerMethodField(read_only=True, help_text="通知人列表")
+class BaseTaskTemplateSerializer(BaseTemplateSerializer):
     project = ProjectSerializer()
+
+
+class TaskTemplateSerializer(BaseTaskTemplateSerializer):
+
     name = serializers.CharField(read_only=True, help_text="模板名称")
     category_name = serializers.CharField(read_only=True, help_text="分类名称")
     creator_name = serializers.CharField(read_only=True, help_text="创建者名称")
@@ -39,23 +40,7 @@ class TaskTemplateSerializer(serializers.ModelSerializer):
     subprocess_has_update = serializers.BooleanField(read_only=True, help_text="子流程是否更新")
     has_subprocess = serializers.BooleanField(read_only=True, help_text="是否有子流程")
     description = serializers.CharField(read_only=True, help_text="流程描述", source="pipeline_template.description")
-    pipeline_tree = ReadWriteSerializerMethodField(read_only=True, help_text="pipeline_tree")
-
-    def get_notify_type(self, obj):
-        if not getattr(obj, "notify_type") or not obj.notify_type:
-            return json.loads(dict())
-        return json.loads(obj.notify_type)
-
-    def set_notify_type(self, data):
-        return {"notify_type": json.loads(data)}
-
-    def get_notify_receivers(self, obj):
-        if not getattr(obj, "notify_receivers") or not obj.notify_receivers:
-            return json.dumps(dict())
-        return json.dumps(obj.notify_receivers)
-
-    def set_notify_receivers(self, data):
-        return {"notify_receivers": json.dumps(data)}
+    pipeline_tree = serializers.SerializerMethodField(read_only=True, help_text="pipeline_tree")
 
     def get_pipeline_tree(self, obj):
         try:
@@ -70,7 +55,7 @@ class TaskTemplateSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
 
-class CreateTaskTemplateSerializer(serializers.ModelSerializer):
+class CreateTaskTemplateSerializer(BaseTaskTemplateSerializer):
 
     name = serializers.CharField(help_text="流程模板名称")
     category = serializers.ChoiceField(choices=TASK_CATEGORY, help_text="模板分类")
@@ -79,8 +64,6 @@ class CreateTaskTemplateSerializer(serializers.ModelSerializer):
     executor_proxy = serializers.CharField(help_text="执行代理", allow_blank=True, required=False)
     template_labels = serializers.ListField(help_text="模板label", required=False)
     default_flow_type = serializers.CharField(help_text="默认流程类型")
-    notify_type = ReadWriteSerializerMethodField(help_text="通知类型")
-    notify_receivers = ReadWriteSerializerMethodField(help_text="通知人列表")
     pipeline_tree = serializers.CharField()
     project = serializers.IntegerField(write_only=True)
 

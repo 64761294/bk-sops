@@ -19,8 +19,7 @@ from gcloud.core.apis.drf.serilaziers.function_task import FunctionTaskSerialize
 from gcloud.core.apis.drf.resource_helpers import ViewSetResourceHelper
 from gcloud.iam_auth import res_factory, IAMMeta
 from gcloud.iam_auth.conf import TASK_ACTIONS
-from ..filtersets import AllLookupSupportFilterSet
-from ..permission import IamPermissionInfo, IamPermission
+from gcloud.core.apis.drf.permission import IamPermissionInfo, IamPermission
 
 
 class FunctionTaskPermission(IamPermission):
@@ -29,24 +28,18 @@ class FunctionTaskPermission(IamPermission):
     }
 
 
-class FunctionTaskFilter(AllLookupSupportFilterSet):
-    class Meta:
-        model = FunctionTask
-        fields = {
-            "task__project__id": ["exact"],
-            "creator": ["exact", "icontains"],
-            "claimant": ["exact", "icontains"],
-            "status": ["exact"],
-            "create_time": ["gte", "lte"],
-            "claim_time": ["gte", "lte"],
-        }
-
-
 class FunctionTaskViewSet(GcloudListViewSet):
     queryset = FunctionTask.objects.filter(task__is_deleted=False)
     serializer_class = FunctionTaskSerializer
     iam_resource_helper = ViewSetResourceHelper(
         resource_func=res_factory.resources_for_function_task_obj, actions=TASK_ACTIONS
     )
-    filterset_class = FunctionTaskFilter
     permission_classes = [permissions.IsAuthenticated, FunctionTaskPermission]
+    filter_fields = {
+        "task__project__id": ["exact"],
+        "creator": ["exact", "icontains"],
+        "claimant": ["exact", "icontains"],
+        "status": ["exact"],
+        "create_time": ["gte", "lte"],
+        "claim_time": ["gte", "lte"],
+    }
