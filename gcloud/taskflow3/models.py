@@ -707,11 +707,11 @@ class TaskFlowInstance(models.Model):
         verbose_name_plural = _("流程实例 TaskFlowInstance")
         ordering = ["-id"]
 
-    def delete(self, real_delete=False):
-        if real_delete:
-            super().delete()
-        setattr(self, "is_deleted", True)
-        self.save()
+    # def delete(self, real_delete=False):
+    #     if real_delete:
+    #         super().delete()
+    #     setattr(self, "is_deleted", True)
+    #     self.save()
 
     @property
     def instance_id(self):

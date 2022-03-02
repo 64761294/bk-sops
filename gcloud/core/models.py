@@ -360,11 +360,11 @@ class StaffGroupSet(models.Model):
     def __str__(self):
         return self.name
 
-    def delete(self, real_delete=False):
-        if real_delete:
-            super().delete()
-        setattr(self, "is_deleted", True)
-        self.save()
+    # def delete(self, real_delete=False):
+    #     if real_delete:
+    #         super().delete()
+    #     setattr(self, "is_deleted", True)
+    #     self.save()
 
 
 class ProjectConfig(models.Model):
